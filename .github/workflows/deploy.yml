@@ -6,7 +6,6 @@ on:
       - main
 
 env:
-  ACR_NAME: ${{ secrets.ACR_NAME }}
   IMAGE_NAME: email-triage-agent
   CONTAINER_APP_NAME: email-triage-app
   RESOURCE_GROUP: email-triage-rg
@@ -25,17 +24,36 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Log in to Azure Container Registry
-        run: |
-          az acr login --name ${{ env.ACR_NAME }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ACR_NAME }}.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
 
       - name: Build and push Docker image
         run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} .
-          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Deploy to Azure Container Apps
         run: |
           az containerapp update \
             --name ${{ env.CONTAINER_APP_NAME }} \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            --set-env-vars \
+              AZURE_OPENAI_API_KEY=secretref:azure-openai-key \
+              AZURE_OPENAI_ENDPOINT=secretref:azure-openai-endpoint \
+              AZURE_OPENAI_DEPLOYMENT=secretref:azure-openai-deployment \
+              AZURE_OPENAI_API_VERSION=secretref:azure-openai-version
+
+      - name: Set Container App secrets
+        run: |
+          az containerapp secret set \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --secrets \
+              azure-openai-key=${{ secrets.AZURE_OPENAI_API_KEY }} \
+              azure-openai-endpoint=${{ secrets.AZURE_OPENAI_ENDPOINT }} \
+              azure-openai-deployment=${{ secrets.AZURE_OPENAI_DEPLOYMENT }} \
+              azure-openai-version=${{ secrets.AZURE_OPENAI_API_VERSION }}
