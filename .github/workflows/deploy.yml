@@ -35,6 +35,17 @@ jobs:
           docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} .
           docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
+      - name: Set Container App secrets
+        run: |
+          az containerapp secret set \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --secrets \
+              azure-openai-key=${{ secrets.AZURE_OPENAI_API_KEY }} \
+              azure-openai-endpoint=${{ secrets.AZURE_OPENAI_ENDPOINT }} \
+              azure-openai-deployment=${{ secrets.AZURE_OPENAI_DEPLOYMENT }} \
+              azure-openai-version=${{ secrets.AZURE_OPENAI_API_VERSION }}
+
       - name: Deploy to Azure Container Apps
         run: |
           az containerapp update \
@@ -46,14 +57,3 @@ jobs:
               AZURE_OPENAI_ENDPOINT=secretref:azure-openai-endpoint \
               AZURE_OPENAI_DEPLOYMENT=secretref:azure-openai-deployment \
               AZURE_OPENAI_API_VERSION=secretref:azure-openai-version
-
-      - name: Set Container App secrets
-        run: |
-          az containerapp secret set \
-            --name ${{ env.CONTAINER_APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --secrets \
-              azure-openai-key=${{ secrets.AZURE_OPENAI_API_KEY }} \
-              azure-openai-endpoint=${{ secrets.AZURE_OPENAI_ENDPOINT }} \
-              azure-openai-deployment=${{ secrets.AZURE_OPENAI_DEPLOYMENT }} \
-              azure-openai-version=${{ secrets.AZURE_OPENAI_API_VERSION }}
