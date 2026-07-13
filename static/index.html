@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Email Triage Agent</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #ffffff;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header .logo { font-size: 1.5rem; }
+    header h1 { font-size: 1.2rem; font-weight: 600; color: #4f46e5; }
+    header span { font-size: 0.75rem; color: #94a3b8; margin-left: 8px; }
+
+    main {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      padding: 32px;
+      flex: 1;
+    }
+
+    .panel {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .panel h2 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+    }
+
+    .quick-emails { display: flex; flex-direction: column; gap: 8px; }
+
+    .quick-btn {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #334155;
+      font-size: 0.82rem;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.2s, background 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .quick-btn:hover { border-color: #6366f1; background: #eef2ff; }
+    .quick-btn .badge {
+      font-size: 0.68rem;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .badge-urgent { background: #7f1d1d; color: #fca5a5; }
+    .badge-normal { background: #1e3a5f; color: #93c5fd; }
+    .badge-spam   { background: #3b2f00; color: #fde68a; }
+
+    textarea {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      color: #1e293b;
+      font-size: 0.9rem;
+      padding: 12px;
+      resize: vertical;
+      min-height: 120px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    textarea:focus { border-color: #6366f1; }
+
+    .send-btn {
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .send-btn:hover { background: #4f46e5; }
+    .send-btn:disabled { background: #374151; cursor: not-allowed; color: #6b7280; }
+
+    /* Steps feed */
+    .steps-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 80px;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    .step-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .step-icon.pending  { background: #f1f5f9; color: #94a3b8; }
+    .step-icon.active   { background: #eef2ff; color: #6366f1; animation: pulse 1s infinite; }
+    .step-icon.done     { background: #f0fdf4; color: #22c55e; }
+
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    .step-text { font-size: 0.85rem; color: #64748b; padding-top: 5px; }
+    .step-text.active { color: #4f46e5; }
+
+    /* Result card */
+    .result-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px;
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .result-card.visible { display: flex; }
+
+    .result-classification {
+      font-size: 1.1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .result-output {
+      font-size: 0.85rem;
+      color: #475569;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      border-left: 3px solid #e2e8f0;
+      padding-left: 12px;
+    }
+
+    .history-list { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 420px; }
+
+    .history-item {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 0.82rem;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .history-item:hover { border-color: #4f46e5; }
+    .history-item .hi-email { color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .history-item .hi-meta  { display: flex; gap: 8px; align-items: center; color: #94a3b8; font-size: 0.75rem; }
+
+    .empty-state { color: #94a3b8; font-size: 0.82rem; text-align: center; padding: 24px 0; }
+
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid #e2e8f0;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">✉️</div>
+  <h1>Email Triage Agent <span>powered by CrewAI + GPT-4.1</span></h1>
+</header>
+
+<main>
+  <!-- Left: Input -->
+  <div style="display:flex; flex-direction:column; gap:20px;">
+
+    <div class="panel">
+      <h2>Quick Test Emails</h2>
+      <div class="quick-emails">
+        <button class="quick-btn" onclick="loadSample('urgent')">
+          <span class="badge badge-urgent">URGENT</span>
+          CRITICAL - Payment Service Down (P0) — 340 transactions failing...
+        </button>
+        <button class="quick-btn" onclick="loadSample('normal')">
+          <span class="badge badge-normal">NORMAL</span>
+          Meeting Notes - Q3 Roadmap Review (July 7)...
+        </button>
+        <button class="quick-btn" onclick="loadSample('spam')">
+          <span class="badge badge-spam">SPAM</span>
+          You Have Been Selected - Claim Your Rs. 50,00,000 Prize!...
+        </button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Compose Email</h2>
+      <textarea id="emailInput" placeholder="Paste or type an email here..."></textarea>
+      <button class="send-btn" id="sendBtn" onclick="submitEmail()">Run Triage</button>
+    </div>
+
+  </div>
+
+  <!-- Right: Output -->
+  <div style="display:flex; flex-direction:column; gap:20px;">
+
+    <div class="panel">
+      <h2>Processing Pipeline</h2>
+      <div class="steps-feed" id="stepsFeed">
+        <div class="empty-state">Submit an email to see the agent pipeline run.</div>
+      </div>
+
+      <div class="result-card" id="resultCard">
+        <div class="result-classification" id="resultClassification"></div>
+        <div class="result-output" id="resultOutput"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Triage History</h2>
+      <div class="history-list" id="historyList">
+        <div class="empty-state">No emails triaged yet.</div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+  const SAMPLES = {
+    urgent: `From: ops-alerts@techvestglobal.com
+To: engineering-team@techvestglobal.com
+Subject: CRITICAL - Payment Service Down (P0)
+Date: Mon, 7 Jul 2026 14:32:11 +0530
+
+Hi team,
+
+Our payment processing service has been returning 503 errors for the past 12 minutes. Approximately 340 customer transactions have failed since 14:20 IST. The error rate on the /api/v2/payments endpoint is at 98%.
+
+Preliminary logs point to a connection pool exhaustion on the primary RDS instance (prod-db-payments-01). The replica appears healthy.
+
+On-call engineer Ravi is unavailable. Need someone to take ownership immediately.
+
+Severity: P0
+Affected users: ~340 (and counting)
+Revenue impact: est. Rs. 8.5L per hour
+
+-- Automated alert from PagerDuty / TechVest Ops`,
+
+    normal: `From: priya.sharma@techvestglobal.com
+To: product-team@techvestglobal.com
+Subject: Meeting Notes - Q3 Roadmap Review (July 7)
+Date: Mon, 7 Jul 2026 13:05:00 +0530
+
+Hi everyone,
+
+Please find below the notes from today's Q3 roadmap review session.
+
+Attendees: Priya, Arjun, Neha, Vishal, Rohit
+
+Key decisions:
+1. Feature freeze for v2.4 confirmed for July 25.
+2. The AI triage module will be prioritised over the reporting dashboard.
+3. Design review for the new onboarding flow scheduled for July 14.
+
+Action items:
+- Vishal: Share updated API spec by Wednesday
+- Neha: Finalize UX mocks for onboarding by July 12
+- Rohit: Set up staging environment for v2.4 by July 18
+
+Next meeting: July 14 at 11:00 AM IST.
+
+Best,
+Priya`,
+
+    spam: `From: noreply@lucky-winner-claims.net
+To: vishal@techvestglobal.com
+Subject: You Have Been Selected - Claim Your Rs. 50,00,000 Prize!
+Date: Mon, 7 Jul 2026 09:14:37 +0000
+
+Dear Valued Customer,
+
+CONGRATULATIONS! Your email address has been randomly selected as the GRAND PRIZE WINNER of our annual sweepstakes.
+
+You have won: Rs. 50,00,000 (FIFTY LAKH RUPEES)
+
+To claim your prize, click the link below within 48 hours:
+>> http://claim-your-prize-now.lucky-winner-claims.net/redeem?id=VV20260707 <<
+
+You will need to provide your bank account details to process the transfer. A small processing fee of Rs. 2,500 is required to release your funds.
+
+This offer expires in 48 hours. Act NOW!
+
+Regards,
+Mr. James Okonkwo
+International Prize Committee`,
+  };
+
+  const history = [];
+
+  function loadSample(type) {
+    document.getElementById("emailInput").value = SAMPLES[type];
+  }
+
+  function classificationStyle(cls) {
+    if (cls.includes("urgent")) return { emoji: "🔴", color: "#fca5a5", badge: "badge-urgent" };
+    if (cls.includes("normal")) return { emoji: "🔵", color: "#93c5fd", badge: "badge-normal" };
+    return { emoji: "🟡", color: "#fde68a", badge: "badge-spam" };
+  }
+
+  function addStep(icon, text, state = "done") {
+    const feed = document.getElementById("stepsFeed");
+    const item = document.createElement("div");
+    item.className = "step-item";
+    item.innerHTML = `
+      <div class="step-icon ${state}">${icon}</div>
+      <div class="step-text ${state === 'active' ? 'active' : ''}">${text}</div>
+    `;
+    feed.appendChild(item);
+    return item;
+  }
+
+  async function submitEmail() {
+    const emailText = document.getElementById("emailInput").value.trim();
+    if (!emailText) return;
+
+    const btn = document.getElementById("sendBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Processing...';
+
+    const feed = document.getElementById("stepsFeed");
+    feed.innerHTML = "";
+    document.getElementById("resultCard").classList.remove("visible");
+
+    addStep("📨", "Email received by triage system.", "done");
+    const classifyStep = addStep("🤖", "Classifier agent is analysing the email...", "active");
+
+    try {
+      const response = await fetch("/triage/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email_text: emailText }),
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let finalResult = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n").filter(l => l.startsWith("data:"));
+
+        for (const line of lines) {
+          const data = JSON.parse(line.slice(5).trim());
+
+          if (data.step === "classified") {
+            classifyStep.querySelector(".step-icon").className = "step-icon done";
+            classifyStep.querySelector(".step-icon").textContent = "✓";
+            classifyStep.querySelector(".step-text").textContent = data.message;
+            classifyStep.querySelector(".step-text").classList.remove("active");
+          }
+
+          if (data.step === "routing") {
+            addStep("⚡", data.message, "active");
+          }
+
+          if (data.step === "done") {
+            finalResult = data.result;
+            feed.querySelector(".step-icon.active") && (
+              feed.querySelector(".step-icon.active").className = "step-icon done",
+              feed.querySelector(".step-icon.active") && (feed.querySelector(".step-icon.active").textContent = "✓")
+            );
+            addStep("✓", "Triage complete.", "done");
+          }
+        }
+      }
+
+      if (finalResult) {
+        showResult(finalResult);
+        addToHistory(finalResult);
+      }
+
+    } catch (err) {
+      addStep("✗", `Error: ${err.message}`, "pending");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Run Triage";
+    }
+  }
+
+  function showResult(result) {
+    const card = document.getElementById("resultCard");
+    const cls = result.classification || "unknown";
+    const style = classificationStyle(cls);
+
+    document.getElementById("resultClassification").innerHTML =
+      `${style.emoji} <span style="color:${style.color}">${cls.toUpperCase()}</span>`;
+    document.getElementById("resultOutput").textContent = result.output;
+    card.classList.add("visible");
+  }
+
+  function addToHistory(result) {
+    history.unshift(result);
+    const list = document.getElementById("historyList");
+    const style = classificationStyle(result.classification || "");
+
+    if (list.querySelector(".empty-state")) list.innerHTML = "";
+
+    const item = document.createElement("div");
+    item.className = "history-item";
+    item.innerHTML = `
+      <div class="hi-email">${result.email}</div>
+      <div class="hi-meta">
+        <span class="badge ${style.badge}">${(result.classification || "unknown").toUpperCase()}</span>
+        <span>${new Date().toLocaleTimeString()}</span>
+      </div>
+    `;
+    item.onclick = () => showResult(result);
+    list.prepend(item);
+  }
+</script>
+</body>
+</html>
